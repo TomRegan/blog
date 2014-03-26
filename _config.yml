@@ -1,0 +1,14 @@
+name: 'things i am currently doing re: computers'
+description: 
+meta_description: "things i am currently doing re: computers"
+logo: '/assets/images/profile.png'
+
+
+markdown: redcarpet
+pygments: true
+
+paginate: 15
+
+# Details for the RSS feed generator
+url:            'http://tomregan.github.io'
+author:         'Tom Regan'
