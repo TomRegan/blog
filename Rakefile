@@ -1,107 +1,139 @@
 require "rubygems"
-require 'rake'
-require 'yaml'
-require 'time'
 
-SOURCE = "."
-CONFIG = {
-  'version' => "0.3.0",
-  'themes' => File.join(SOURCE, "_includes", "themes"),
-  'layouts' => File.join(SOURCE, "_layouts"),
-  'posts' => File.join(SOURCE, "_posts"),
-  'post_ext' => "md",
-  'theme_package_version' => "0.1.0"
-}
+repo_url      = "git@github.com:TomRegan/tomregan.github.io.git"
+public_dir    = "_site"
+source_dir    = "."    # source file directory
+deploy_dir    = "_deploy"
+posts_dir     = "_posts"
+drafts_dir    = "_drafts"
+new_post_ext  = "md"
+new_page_ext  = "md"
+deploy_branch = "master"
+# deploy_branch = "gh-pages"
 
-# Path configuration helper
-module JB
-  class Path
-    SOURCE = "."
-    Paths = {
-      :layouts => "_layouts",
-      :themes => "_includes/themes",
-      :theme_assets => "assets/themes",
-      :theme_packages => "_theme_packages",
-      :posts => "_posts"
-    }
-    
-    def self.base
-      SOURCE
-    end
+#######################
+# Working with Jekyll #
+#######################
 
-    # build a path relative to configured path settings.
-    def self.build(path, opts = {})
-      opts[:root] ||= SOURCE
-      path = "#{opts[:root]}/#{Paths[path.to_sym]}/#{opts[:node]}".split("/")
-      path.compact!
-      File.__send__ :join, path
-    end
-  
-  end #Path
-end #JB
+desc "Generate jekyll site"
+task :build do
+  puts "## Generating Site with Jekyll"
+  system "jekyll build"
+end
 
-# Usage: rake post title="A Title" [date="2012-02-09"] [tags=[tag1,tag2]] [category="category"]
-desc "Begin a new post in #{CONFIG['posts']}"
-task :post do
-  abort("rake aborted: '#{CONFIG['posts']}' directory not found.") unless FileTest.directory?(CONFIG['posts'])
-  title = ENV["title"] || "new-post"
-  tags = ENV["tags"] || "[]"
-  category = ENV["category"] || ""
-  category = "\"#{category.gsub(/-/,' ')}\"" if !category.empty?
-  slug = title.downcase.strip.gsub(' ', '-').gsub(/[^\w-]/, '')
-  begin
-    date = (ENV['date'] ? Time.parse(ENV['date']) : Time.now).strftime('%Y-%m-%d')
-  rescue => e
-    puts "Error - date format must be YYYY-MM-DD, please check you typed it correctly!"
-    exit -1
-  end
-  filename = File.join(CONFIG['posts'], "#{date}-#{slug}.#{CONFIG['post_ext']}")
+desc "preview the site in a web browser"
+task :preview do
+ puts "Starting to watch source with Jekyll."
+  system "jekyll serve -w"
+end
+
+# usage rake new_post[my-new-post] or rake new_post['my new post'] or rake new_post (defaults to "new-post")
+desc "Begin a new post in #{source_dir}/#{drafts_dir}"
+task :new_post, :title do |t, args|
+  title = args.title ? args.title : get_stdin("Enter a title for your post: ")
+  filename = "#{source_dir}/#{drafts_dir}/#{Time.now.strftime('%Y-%m-%d')}-#{title}.#{new_post_ext}"
   if File.exist?(filename)
     abort("rake aborted!") if ask("#{filename} already exists. Do you want to overwrite?", ['y', 'n']) == 'n'
   end
-  
   puts "Creating new post: #{filename}"
   open(filename, 'w') do |post|
     post.puts "---"
     post.puts "layout: post"
-    post.puts "title: \"#{title.gsub(/-/,' ')}\""
-    post.puts 'description: ""'
-    post.puts "category: #{category}"
-    post.puts "tags: #{tags}"
+    post.puts "categories: "
     post.puts "---"
-    post.puts "{% include JB/setup %}"
   end
-end # task :post
+end
 
-# Usage: rake page name="about.html"
-# You can also specify a sub-directory path.
-# If you don't specify a file extention we create an index.html at the path specified
-desc "Create a new page."
-task :page do
-  name = ENV["name"] || "new-page.md"
-  filename = File.join(SOURCE, "#{name}")
-  filename = File.join(filename, "index.html") if File.extname(filename) == ""
-  title = File.basename(filename, File.extname(filename)).gsub(/[\W\_]/, " ").gsub(/\b\w/){$&.upcase}
-  if File.exist?(filename)
-    abort("rake aborted!") if ask("#{filename} already exists. Do you want to overwrite?", ['y', 'n']) == 'n'
-  end
-  
-  mkdir_p File.dirname(filename)
-  puts "Creating new page: #{filename}"
-  open(filename, 'w') do |post|
-    post.puts "---"
-    post.puts "layout: page"
-    post.puts "title: \"#{title}\""
-    post.puts 'description: ""'
-    post.puts "---"
-    post.puts "{% include JB/setup %}"
-  end
-end # task :page
+# usage rake new_page[my-new-page] or rake new_page[my-new-page.html] or rake new_page (defaults to "new-page.markdown")
+desc "Create a new page in #{source_dir}/(filename)/index.#{new_page_ext}"
+task :new_page, :filename do |t, args|
+  raise "### You haven't set anything up yet. First run `rake install` to set up an Octopress theme." unless File.directory?(source_dir)
+  args.with_defaults(:filename => 'new-page')
+  page_dir = [source_dir]
+  if args.filename.downcase =~ /(^.+\/)?(.+)/
+    filename, dot, extension = $2.rpartition('.').reject(&:empty?)         # Get filename and extension
+    title = filename
+    page_dir.concat($1.downcase.sub(/^\//, '').split('/')) unless $1.nil?  # Add path to page_dir Array
+    if extension.nil?
+      page_dir << filename
+      filename = "index"
+    end
+    extension ||= new_page_ext
+    page_dir = page_dir.map! { |d| d = d.to_url }.join('/')                # Sanitize path
+    filename = filename.downcase.to_url
 
-desc "Launch preview environment"
-task :preview do
-  system "jekyll serve -w"
-end # task :preview
+    mkdir_p page_dir
+    file = "#{page_dir}/#{filename}.#{extension}"
+    if File.exist?(file)
+      abort("rake aborted!") if ask("#{file} already exists. Do you want to overwrite?", ['y', 'n']) == 'n'
+    end
+    puts "Creating new page: #{file}"
+    open(file, 'w') do |page|
+      page.puts "---"
+      page.puts "layout: page"
+      page.puts "title: \"#{title}\""
+      page.puts "date: #{Time.now.strftime('%Y-%m-%d %H:%M')}"
+      page.puts "comments: true"
+      page.puts "sharing: true"
+      page.puts "footer: true"
+      page.puts "---"
+    end
+  else
+    puts "Syntax error: #{args.filename} contains unsupported characters"
+  end
+end
+
+
+desc "Clean out caches: .pygments-cache, .gist-cache, .sass-cache"
+task :clean do
+  rm_rf [".pygments-cache/**",
+         ".gist-cache/**",
+         ".sass-cache/**",
+         "#{public_dir}/",
+         "#{deploy_dir}/"
+        ]
+end
+
+##############
+# Deploying  #
+##############
+
+desc "deploy public directory to github pages"
+multitask :publish do
+  puts "## Deploying branch to Github Pages "
+  (Dir["#{deploy_dir}/*"]).each { |f| rm_rf(f) }
+  puts "\n## Copying #{public_dir} to #{deploy_dir}"
+  cp_r "#{public_dir}/.", deploy_dir
+  cd "#{deploy_dir}" do
+    Rake::Task[:gitignore].execute unless File.exist?("#{deploy_dir}/.gitignore")
+    Rake::Task[:git_init].execute unless File.exist?("#{deploy_dir}/.git")
+    system "git add -A"
+    puts "\n## Committing: Site updated at #{Time.now.utc}"
+    message = "Site updated at #{Time.now.utc}"
+    system "git commit -m \"#{message}\""
+    puts "\n## Pushing generated #{deploy_dir} website"
+    system "git push --force origin #{deploy_branch}"
+    puts "\n## Github Pages deploy complete"
+  end
+end
+
+task :git_init do
+  puts "\n## Initializing the deployment repository"
+  system "git init"  
+  system "git remote add origin #{repo_url}"
+end
+
+task :gitignore do
+  puts "\n## Writing a .gitignore file"
+  open('.gitignore', 'w') do |post|
+    post.puts "Rakefile"
+  end
+end
+
+def get_stdin(message)
+  print message
+  STDIN.gets.chomp
+end
 
 def ask(message, valid_options)
   if valid_options
@@ -112,10 +144,8 @@ def ask(message, valid_options)
   answer
 end
 
-def get_stdin(message)
-  print message
-  STDIN.gets.chomp
+desc "list tasks"
+task :list do
+  puts "Tasks: #{(Rake::Task.tasks - [Rake::Task[:list]]).join(', ')}"
+  puts "(type rake -T for more detail)\n\n"
 end
-
-#Load custom rake scripts
-Dir['_rake/*.rake'].each { |r| load r }
