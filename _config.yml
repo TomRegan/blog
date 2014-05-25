@@ -1,11 +1,11 @@
 name: 'things i am currently doing re: computers'
-description: 
+description:
 meta_description: "things i am currently doing re: computers"
 logo: '/assets/images/pages/all/profile.png'
 banner: '/assets/images/pages/head/banner.png'
 page_assets: '/assets/images/pages'
 markdown: redcarpet
-pygments: true
+highlighter: pygments
 paginate: 15
 url: 'http://tomregan.github.io'
 author: 'Tom Regan'
